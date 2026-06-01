@@ -1,3 +1,6 @@
+#Archivo principal para ejecutar pruebas del compilador Patito
+# Mauricio Perea - A01571406
+
 import lexer as lexer_module
 from parser import parser
 from semantica import reset_semantic, get_type
