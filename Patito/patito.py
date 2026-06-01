@@ -1,463 +1,9 @@
-import ply.lex as lex
-import ply.yacc as yacc
-from collections import deque
-
-# Mauricio Perea Gonzalez
-# Patito Entrega #3 
-
-# ─────────────────────────────────── RESERVADAS ─────────────────────────────────
-
-reserved = {
-    'programa': 'PROGRAMA',
-    'inicio':   'INICIO',
-    'fin':      'FIN',
-    'vars':     'VARS',
-    'entero':   'ENTERO',
-    'flotante': 'FLOTANTE',
-    'nula':     'NULA',
-    'si':       'SI',
-    'sino':     'SINO',
-    'mientras': 'MIENTRAS',
-    'haz':      'HAZ',
-    'escribe':  'ESCRIBE',
-}
-
-tokens = list(reserved.values()) + [
-    'ID', 'CTE_ENT', 'CTE_FLOT', 'LETRERO',
-    'ASIGNA', 'IGUAL', 'DIF', 'MAYOR', 'MENOR',
-    'SUMA', 'RESTA', 'MULT', 'DIV',
-    'PARIZQ', 'PARDER', 'LLAVEIZQ', 'LLAVEDER',
-    'PUNTOYCOMA', 'COMA', 'DOSPUNTOS',
-]
-
-# ─────────────────────────────────── LEXER ────────────────────────────────────
-
-t_IGUAL      = r'=='
-t_DIF        = r'!='
-t_MAYOR      = r'>'
-t_MENOR      = r'<'
-t_ASIGNA     = r'='
-t_SUMA       = r'\+'
-t_RESTA      = r'-'
-t_MULT       = r'\*'
-t_DIV        = r'/'
-t_PARIZQ     = r'\('
-t_PARDER     = r'\)'
-t_LLAVEIZQ   = r'\{'
-t_LLAVEDER   = r'\}'
-t_PUNTOYCOMA = r';'
-t_COMA       = r','
-t_DOSPUNTOS  = r':'
-t_ignore     = ' \t'
-
-def t_CTE_FLOT(t):
-    r'\d+\.\d+'
-    t.value = float(t.value)
-    return t
-
-def t_CTE_ENT(t):
-    r'\d+'
-    t.value = int(t.value)
-    return t
-
-def t_LETRERO(t):
-    r'"[^"]*"'
-    return t
-
-def t_ID(t):
-    r'[a-zA-Z][a-zA-Z0-9_]*'
-    t.type = reserved.get(t.value, 'ID')
-    return t
-
-def t_newline(t):
-    r'\n+'
-    t.lexer.lineno += len(t.value)
-
-def t_error(t):
-    print(f"  Token no reconocido: '{t.value[0]}' en línea {t.lexer.lineno}")
-    t.lexer.skip(1)
-
-lexer = lex.lex()
-
-# ─────────────────────────────────── CUBO SEMÁNTICO ───────────────────────────
-
-semantic_cube = {
-    'entero': {
-        'entero': {
-            '+': 'entero',   '-': 'entero',   '*': 'entero',   '/': 'entero',
-            '>': 'entero',   '<': 'entero',   '==': 'entero',  '!=': 'entero',
-        },
-        'flotante': {
-            '+': 'flotante', '-': 'flotante', '*': 'flotante', '/': 'flotante',
-            '>': 'entero',   '<': 'entero',   '==': 'entero',  '!=': 'entero',
-        },
-    },
-    'flotante': {
-        'entero': {
-            '+': 'flotante', '-': 'flotante', '*': 'flotante', '/': 'flotante',
-            '>': 'entero',   '<': 'entero',   '==': 'entero',  '!=': 'entero',
-        },
-        'flotante': {
-            '+': 'flotante', '-': 'flotante', '*': 'flotante', '/': 'flotante',
-            '>': 'entero',   '<': 'entero',   '==': 'entero',  '!=': 'entero',
-        },
-    },
-}
-
-def get_type(left, op, right):
-    try:
-        return semantic_cube[left][right][op]
-    except KeyError:
-        return 'error'
-
-# ─────────────────────────────────── DIRECTORIO DE FUNCIONES ──────────────────
-
-func_dir     = {}
-current_func = None
-
-def add_function(name, ret_type):
-    global current_func
-    if name in func_dir:
-        raise Exception(f"  Error semántico: función '{name}' doblemente declarada.")
-    func_dir[name] = {'tipo': ret_type, 'params': [], 'vars': {}}
-    current_func = name
-
-def add_param(name, var_type):
-    if name in func_dir[current_func]['vars']:
-        raise Exception(f"  Error semántico: parámetro '{name}' doblemente declarado en '{current_func}'.")
-    func_dir[current_func]['params'].append((name, var_type))
-    func_dir[current_func]['vars'][name] = {'tipo': var_type}
-
-def add_variable(name, var_type):
-    scope = func_dir.get(current_func)
-    if scope is None:
-        raise Exception(f"  Error semántico: no hay scope activo para declarar '{name}'.")
-    if name in scope['vars']:
-        raise Exception(f"  Error semántico: variable '{name}' doblemente declarada en '{current_func}'.")
-    scope['vars'][name] = {'tipo': var_type}
-
-def lookup_variable(name):
-    if current_func and name in func_dir[current_func]['vars']:
-        return func_dir[current_func]['vars'][name]['tipo']
-    if 'global' in func_dir and name in func_dir['global']['vars']:
-        return func_dir['global']['vars'][name]['tipo']
-    raise Exception(f"  Error semántico: variable '{name}' no declarada.")
-
-def reset_semantic():
-    global func_dir, current_func
-    func_dir     = {}
-    current_func = None
-    reset_codegen()
-
-def print_func_dir():
-    print("")
-    print("  Directorio de Funciones:")
-    for fname, fdata in func_dir.items():
-        print(f"    {fname} | tipo: {fdata['tipo']} | params: {fdata['params']}")
-        for vname, vdata in fdata['vars'].items():
-            print(f"      var: {vname} | tipo: {vdata['tipo']}")
-
-# ─────────────────────────────────── GENERACIÓN DE CÓDIGO ─────────────────────
-
-pila_operandos  = []
-pila_operadores = []
-pila_tipos      = []
-cuadruplos      = deque()
-temp_count      = 0
-
-def new_temp():
-    global temp_count
-    temp_count += 1
-    return f"t{temp_count}"
-
-def reset_codegen():
-    global pila_operandos, pila_operadores, pila_tipos, cuadruplos, temp_count
-    pila_operandos  = []
-    pila_operadores = []
-    pila_tipos      = []
-    cuadruplos      = deque()
-    temp_count      = 0
-
-def generate_quadruple(op):
-    right_op   = pila_operandos.pop()
-    right_type = pila_tipos.pop()
-    left_op    = pila_operandos.pop()
-    left_type  = pila_tipos.pop()
-    pila_operadores.pop()
-
-    result_type = get_type(left_type, op, right_type)
-    if result_type == 'error':
-        raise Exception(f"  Error semántico: operación '{left_type} {op} {right_type}' no permitida.")
-
-    temp = new_temp()
-    cuadruplos.append((op, left_op, right_op, temp))
-    pila_operandos.append(temp)
-    pila_tipos.append(result_type)
-
-def print_quadruples():
-    print("")
-    print("  Cuádruplos generados:")
-    for i, q in enumerate(cuadruplos):
-        print(f"    {i:>3}:  {q[0]:<4}  {str(q[1]):<10}  {str(q[2]):<10}  {q[3]}")
-
-# ─────────────────────────────────── PARSER ───────────────────────────────────
-
-def p_programa(p):
-    'programa : PROGRAMA prog_id PUNTOYCOMA vars_opc funcs_opc INICIO cuerpo FIN'
-    print_func_dir()
-    print_quadruples()
-
-def p_prog_id(p):
-    'prog_id : ID'
-    add_function(p[1], 'programa')
-    p[0] = p[1]
-
-def p_vars_opc_con(p):
-    'vars_opc : vars'
-
-def p_vars_opc_vacio(p):
-    'vars_opc : empty'
-
-def p_funcs_opc_con(p):
-    'funcs_opc : funcs funcs_opc'
-
-def p_funcs_opc_vacio(p):
-    'funcs_opc : empty'
-
-def p_vars(p):
-    'vars : VARS lista_ids DOSPUNTOS tipo PUNTOYCOMA'
-    for var_name in p[2]:
-        add_variable(var_name, p[4])
-
-def p_lista_ids_uno(p):
-    'lista_ids : ID'
-    p[0] = [p[1]]
-
-def p_lista_ids_mas(p):
-    'lista_ids : ID COMA lista_ids'
-    p[0] = [p[1]] + p[3]
-
-def p_tipo_entero(p):
-    'tipo : ENTERO'
-    p[0] = 'entero'
-
-def p_tipo_flotante(p):
-    'tipo : FLOTANTE'
-    p[0] = 'flotante'
-
-def p_cuerpo(p):
-    'cuerpo : LLAVEIZQ estatutos LLAVEDER'
-
-def p_estatutos_vacio(p):
-    'estatutos : empty'
-
-def p_estatutos_con(p):
-    'estatutos : estatuto estatutos'
-
-def p_estatuto_asigna(p):
-    'estatuto : asigna'
-
-def p_estatuto_condicion(p):
-    'estatuto : condicion'
-
-def p_estatuto_ciclo(p):
-    'estatuto : ciclo'
-
-def p_estatuto_imprime(p):
-    'estatuto : imprime'
-
-def p_estatuto_llamada(p):
-    'estatuto : llamada PUNTOYCOMA'
-
-def p_asigna(p):
-    'asigna : ID ASIGNA expresion PUNTOYCOMA'
-    result = pila_operandos.pop()
-    pila_tipos.pop()
-    cuadruplos.append(('=', result, None, p[1]))
-
-def p_condicion(p):
-    'condicion : SI PARIZQ expresion PARDER cuerpo sino_opc'
-
-def p_sino_con(p):
-    'sino_opc : SINO cuerpo'
-
-def p_sino_vacio(p):
-    'sino_opc : PUNTOYCOMA'
-
-def p_ciclo(p):
-    'ciclo : MIENTRAS PARIZQ expresion PARDER HAZ cuerpo PUNTOYCOMA'
-
-def p_imprime(p):
-    'imprime : ESCRIBE PARIZQ imprime_items PARDER PUNTOYCOMA'
-
-def p_imprime_items_uno(p):
-    'imprime_items : imprime_item'
-
-def p_imprime_items_mas(p):
-    'imprime_items : imprime_item COMA imprime_items'
-
-def p_imprime_item_exp(p):
-    'imprime_item : expresion'
-    result = pila_operandos.pop()
-    pila_tipos.pop()
-    cuadruplos.append(('print', result, None, None))
-
-def p_imprime_item_letrero(p):
-    'imprime_item : LETRERO'
-    cuadruplos.append(('print', p[1], None, None))
-
-# ── Expresiones ──
-
-def p_expresion_simple(p):
-    'expresion : exp'
-    p[0] = p[1]
-
-def p_expresion_mayor(p):
-    'expresion : exp MAYOR exp'
-    pila_operadores.append('>')
-    generate_quadruple('>')
-    p[0] = pila_tipos[-1]
-
-def p_expresion_menor(p):
-    'expresion : exp MENOR exp'
-    pila_operadores.append('<')
-    generate_quadruple('<')
-    p[0] = pila_tipos[-1]
-
-def p_expresion_igual(p):
-    'expresion : exp IGUAL exp'
-    pila_operadores.append('==')
-    generate_quadruple('==')
-    p[0] = pila_tipos[-1]
-
-def p_expresion_dif(p):
-    'expresion : exp DIF exp'
-    pila_operadores.append('!=')
-    generate_quadruple('!=')
-    p[0] = pila_tipos[-1]
-
-def p_exp_termino(p):
-    'exp : termino'
-    p[0] = p[1]
-
-def p_exp_suma(p):
-    'exp : termino SUMA exp'
-    pila_operadores.append('+')
-    generate_quadruple('+')
-    p[0] = pila_tipos[-1]
-
-def p_exp_resta(p):
-    'exp : termino RESTA exp'
-    pila_operadores.append('-')
-    generate_quadruple('-')
-    p[0] = pila_tipos[-1]
-
-def p_termino_factor(p):
-    'termino : factor'
-    p[0] = p[1]
-
-def p_termino_mult(p):
-    'termino : factor MULT termino'
-    pila_operadores.append('*')
-    generate_quadruple('*')
-    p[0] = pila_tipos[-1]
-
-def p_termino_div(p):
-    'termino : factor DIV termino'
-    pila_operadores.append('/')
-    generate_quadruple('/')
-    p[0] = pila_tipos[-1]
-
-def p_factor_paren(p):
-    'factor : PARIZQ expresion PARDER'
-    p[0] = p[2]
-
-def p_factor_pos(p):
-    'factor : SUMA factor'
-    p[0] = p[2]
-
-def p_factor_neg(p):
-    'factor : RESTA factor'
-    op   = pila_operandos.pop()
-    tipo = pila_tipos.pop()
-    temp = new_temp()
-    cuadruplos.append(('neg', op, None, temp))
-    pila_operandos.append(temp)
-    pila_tipos.append(tipo)
-    p[0] = tipo
-
-def p_factor_cte_ent(p):
-    'factor : CTE_ENT'
-    pila_operandos.append(p[1])
-    pila_tipos.append('entero')
-    p[0] = 'entero'
-
-def p_factor_cte_flot(p):
-    'factor : CTE_FLOT'
-    pila_operandos.append(p[1])
-    pila_tipos.append('flotante')
-    p[0] = 'flotante'
-
-def p_factor_id(p):
-    'factor : ID'
-    tipo = lookup_variable(p[1])
-    pila_operandos.append(p[1])
-    pila_tipos.append(tipo)
-    p[0] = tipo
-
-def p_factor_llamada(p):
-    'factor : llamada'
-    p[0] = p[1]
-
-def p_funcs(p):
-    'funcs : tipo_ret funcs_id PARIZQ params PARDER LLAVEIZQ vars_opc cuerpo LLAVEDER PUNTOYCOMA'
-
-def p_funcs_id(p):
-    'funcs_id : ID'
-    add_function(p[1], p[-1])
-    p[0] = p[1]
-
-def p_tipo_ret_nula(p):
-    'tipo_ret : NULA'
-    p[0] = 'nula'
-
-def p_tipo_ret_tipo(p):
-    'tipo_ret : tipo'
-    p[0] = p[1]
-
-def p_params_vacio(p):
-    'params : empty'
-
-def p_params_uno(p):
-    'params : ID DOSPUNTOS tipo'
-    add_param(p[1], p[3])
-
-def p_params_mas(p):
-    'params : ID DOSPUNTOS tipo COMA params'
-    add_param(p[1], p[3])
-
-def p_llamada(p):
-    'llamada : ID PARIZQ args PARDER'
-
-def p_args_vacio(p):
-    'args : empty'
-
-def p_args_uno(p):
-    'args : expresion'
-
-def p_args_mas(p):
-    'args : expresion COMA args'
-
-def p_empty(p):
-    'empty :'
-
-def p_error(p):
-    if p:
-        print(f"  Error de sintaxis en '{p.value}', línea {p.lineno}")
-    else:
-        print("  Error de sintaxis: fin de archivo inesperado")
-
-parser = yacc.yacc()
+#Archivo principal para ejecutar pruebas del compilador Patito
+# Mauricio Perea - A01571406
+
+import lexer as lexer_module
+from parser import parser
+from semantica import reset_semantic, get_type
 
 # ─────────────────────────────────── TESTS ──────────────────────────────────────────
 
@@ -639,6 +185,48 @@ inicio
 fin
 """
 
+test_v1 = """
+programa cond_virtual;
+vars x : entero;
+inicio
+{
+    x = 10;
+    si (x > 5) {
+        escribe("x es mayor a 5");
+    };
+}
+fin
+"""
+
+test_v2 = """
+programa ciclo_virtual;
+vars i : entero;
+inicio
+{
+    i = 0;
+    mientras (i < 3) haz {
+        escribe(i);
+        i = i + 1;
+    };
+}
+fin
+"""
+
+test_v3 = """
+programa funcs_virtual;
+nula imprime_doble (n : entero) {
+    {
+        escribe(n);
+        escribe(n);
+    }
+};
+inicio
+{
+    imprime_doble(7);
+}
+fin
+"""
+
 # ─────────────────────────────────── MAIN ───────────────────────────────────
 
 if __name__ == "__main__":
@@ -660,7 +248,7 @@ if __name__ == "__main__":
         print(f"  {nombre}")
         try:
             reset_semantic()
-            parser.parse(codigo, lexer=lex.lex())
+            parser.parse(codigo, lexer=lexer_module.get_lexer())
             print("  Aceptado")
         except Exception as e:
             print(f"  Error inesperado: {e}")
@@ -679,7 +267,7 @@ if __name__ == "__main__":
         print(f"  {nombre}")
         try:
             reset_semantic()
-            parser.parse(codigo, lexer=lex.lex())
+            parser.parse(codigo, lexer=lexer_module.get_lexer())
             print("  Advertencia: no se detectó error")
         except Exception as e:
             print(f"  Error detectado correctamente: {e}")
@@ -695,7 +283,7 @@ if __name__ == "__main__":
         print(f"  {nombre}")
         try:
             reset_semantic()
-            parser.parse(codigo, lexer=lex.lex())
+            parser.parse(codigo, lexer=lexer_module.get_lexer())
             print("  Aceptado")
         except Exception as e:
             print(f"  Error detectado correctamente: {e}")
@@ -724,7 +312,23 @@ if __name__ == "__main__":
         print(f"  {nombre}")
         try:
             reset_semantic()
-            parser.parse(codigo, lexer=lex.lex())
+            parser.parse(codigo, lexer=lexer_module.get_lexer())
+            print("  Aceptado")
+        except Exception as e:
+            print(f"  Error inesperado: {e}")
+
+    print("\n──── DIRECCIONES VIRTUALES Y CONTROL DE FLUJO ────")
+    for nombre, codigo in [
+        ("V1 - Condicional con direcciones virtuales", test_v1),
+        ("V2 - Ciclo con direcciones virtuales",       test_v2),
+        ("V3 - Función con direcciones virtuales",     test_v3),
+    ]:
+        print("")
+        print("")
+        print(f"  {nombre}")
+        try:
+            reset_semantic()
+            parser.parse(codigo, lexer=lexer_module.get_lexer())
             print("  Aceptado")
         except Exception as e:
             print(f"  Error inesperado: {e}")
