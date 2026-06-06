@@ -4,6 +4,7 @@
 import lexer as lexer_module
 from parser import parser
 from semantica import reset_semantic, get_type
+import semantica
 
 # ─────────────────────────────────── TESTS ──────────────────────────────────────────
 
@@ -227,6 +228,84 @@ inicio
 fin
 """
 
+test_vm1 = """
+programa aritmetica;
+vars x, y, z : entero;
+inicio
+{
+    x = 2;
+    y = 3;
+    z = x + y * 4;
+    escribe(z);
+}
+fin
+"""
+
+test_vm2 = """
+programa condicional;
+vars x : entero;
+inicio
+{
+    x = 8;
+    si (x > 5) {
+        escribe("x es mayor a 5");
+    } sino {
+        escribe("x es menor o igual a 5");
+    }
+}
+fin
+"""
+
+test_vm3 = """
+programa ciclo;
+vars i : entero;
+inicio
+{
+    i = 1;
+    mientras (i < 6) haz {
+        escribe(i);
+        i = i + 1;
+    };
+}
+fin
+"""
+
+test_vm4 = """
+programa funciones;
+nula doble (n : entero) {
+    {
+        escribe(n);
+    }
+};
+inicio
+{
+    doble(10);
+    doble(20);
+}
+fin
+"""
+
+test_vm5 = """
+programa combinado;
+vars i, total : entero;
+nula imprime (val : entero) {
+    {
+        escribe(val);
+    }
+};
+inicio
+{
+    total = 0;
+    i = 1;
+    mientras (i < 4) haz {
+        total = total + i;
+        i = i + 1;
+    };
+    imprime(total);
+}
+fin
+"""
+
 # ─────────────────────────────────── MAIN ───────────────────────────────────
 
 if __name__ == "__main__":
@@ -332,3 +411,36 @@ if __name__ == "__main__":
             print("  Aceptado")
         except Exception as e:
             print(f"  Error inesperado: {e}")
+    
+    print("\n──── MÁQUINA VIRTUAL ────")
+    for nombre, codigo in [
+        ("VM1 - Aritmética básica",  test_vm1),
+        ("VM2 - Condicional",        test_vm2),
+        ("VM3 - Ciclo",              test_vm3),
+        ("VM4 - Función",            test_vm4),
+        ("VM5 - Combinado",          test_vm5),
+    ]:
+        print("")
+        print("")
+        print(f"  {nombre}")
+        try:
+            reset_semantic()
+            nuevo_lexer = lexer_module.get_lexer()
+            parser.parse(codigo, lexer=nuevo_lexer)
+
+            from vm import VirtualMachine
+            import memoria as mem_module
+            import codegen
+
+            vm = VirtualMachine(
+                cuadruplos = list(codegen.cuadruplos),
+                cte_table  = dict(mem_module.cte_table),
+                func_dir   = dict(semantica.func_dir),
+            )
+            print("  Output:")
+            vm.run()
+            print("  Ejecución completada ✓")
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            print(f"  Error: {e}")
