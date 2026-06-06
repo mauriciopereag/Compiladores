@@ -13,14 +13,22 @@ import semantica
 import codegen
 
 def p_programa(p):
-    'programa : PROGRAMA prog_id PUNTOYCOMA vars_opc funcs_opc INICIO cuerpo FIN'
+    'programa : PROGRAMA prog_id PUNTOYCOMA vars_opc funcs_opc inicio_cuerpo cuerpo FIN'
     emit('END', None, None, None)
     print_func_dir()
     print_quadruples()
 
+def p_inicio_cuerpo(p):
+    'inicio_cuerpo : INICIO'
+    # PN - backpatch del GOTO inicial para saltar las funciones
+    # apunta al siguiente cuádruplo que será el primero del cuerpo
+    backpatch(codegen.pila_saltos.pop(), len(codegen.cuadruplos))
+
 def p_prog_id(p):
     'prog_id : ID'
     add_function(p[1], 'programa', start_quad=0)
+    idx = emit('GOTO', None, None, None)
+    codegen.pila_saltos.append(idx)
     p[0] = p[1]
 
 def p_vars_opc_con(p):
@@ -99,6 +107,7 @@ def p_si_cond(p):
 
 def p_sino_con(p):
     'sino_opc : sino_marca cuerpo'
+    backpatch(codegen.pila_saltos.pop(), len(codegen.cuadruplos))
 
 def p_sino_marca(p):
     'sino_marca : SINO'
@@ -325,4 +334,4 @@ def p_error(p):
     else:
         print("  Error de sintaxis: fin de archivo inesperado")
 
-parser = yacc.yacc()
+parser = yacc.yacc(debug=False, write_tables=False)
