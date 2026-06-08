@@ -306,6 +306,255 @@ inicio
 fin
 """
 
+# ── Factorial en el main (cíclico) ──
+test_fact_main = """
+programa factorial_main;
+vars n, resultado, i : entero;
+inicio
+{
+    n = 5;
+    resultado = 1;
+    i = 1;
+    mientras (i < 6) haz {
+        resultado = resultado * i;
+        i = i + 1;
+    };
+    escribe("Factorial de 5:");
+    escribe(resultado);
+}
+fin
+"""
+
+# ── Factorial cíclico en función ──
+test_fact_func = """
+programa factorial_func;
+vars resultado : entero;
+nula factorial (n : entero) {
+    vars res, i : entero;
+    {
+        res = 1;
+        i = 1;
+        mientras (i < n + 1) haz {
+            res = res * i;
+            i = i + 1;
+        };
+        escribe(res);
+    }
+};
+inicio
+{
+    factorial(5);
+    factorial(6);
+}
+fin
+"""
+
+# ── Fibonacci en el main ──
+test_fib_main = """
+programa fibonacci_main;
+vars a, b, temp, i : entero;
+inicio
+{
+    a = 0;
+    b = 1;
+    i = 0;
+    escribe("Fibonacci:");
+    escribe(a);
+    escribe(b);
+    mientras (i < 8) haz {
+        temp = a + b;
+        a = b;
+        b = temp;
+        escribe(b);
+        i = i + 1;
+    };
+}
+fin
+"""
+
+# ── Fibonacci en función ──
+test_fib_func = """
+programa fibonacci_func;
+vars i : entero;
+nula fibonacci (n : entero) {
+    vars a, b, temp, j : entero;
+    {
+        a = 0;
+        b = 1;
+        j = 0;
+        escribe(a);
+        escribe(b);
+        mientras (j < n) haz {
+            temp = a + b;
+            a = b;
+            b = temp;
+            escribe(b);
+            j = j + 1;
+        };
+    }
+};
+inicio
+{
+    escribe("Fibonacci 8 terminos:");
+    fibonacci(8);
+}
+fin
+"""
+
+# ── Control de flujo general ──
+test_flujo = """
+programa control_flujo;
+vars x, y : entero;
+inicio
+{
+    x = 10;
+    y = 3;
+    si (x > y) {
+        escribe("x es mayor");
+        si (x > 8) {
+            escribe("x tambien es mayor a 8");
+        };
+    } sino {
+        escribe("y es mayor o igual");
+    }
+    mientras (y < x) haz {
+        escribe(y);
+        y = y + 1;
+    };
+}
+fin
+"""
+
+# ── Cambio de contexto ──
+test_contexto = """
+programa cambio_contexto;
+vars resultado : entero;
+nula suma (a : entero) {
+    vars local : entero;
+    {
+        local = a + 100;
+        escribe(local);
+    }
+};
+nula multiplica (a : entero) {
+    vars local : entero;
+    {
+        local = a * 3;
+        escribe(local);
+    }
+};
+inicio
+{
+    resultado = 5;
+    suma(resultado);
+    multiplica(resultado);
+    suma(20);
+    multiplica(20);
+}
+fin
+"""
+
+test_pelos = """
+programa pelos;
+vars i, j : entero;
+nula uno (x : entero) {
+    vars res : entero;
+    {
+        res = x * 2;
+        escribe(res);
+    }
+};
+nula dos (x : entero) {
+    vars r1, r2, r3 : entero;
+    {
+        r1 = x * 2;
+        r2 = x - 2;
+        r3 = r2 * 2;
+        escribe(r1 + r3 + 3);
+    }
+};
+inicio
+{
+    i = 5;
+    dos(i + 1 - 2);
+}
+fin
+"""
+
+# ── Recursión simple: factorial recursivo ──
+test_rec_simple = """
+programa factorial_recursivo;
+vars resultado : entero;
+entero factorial (n : entero) {
+    vars res : entero;
+    {
+        si (n < 2) {
+            retorna 1;
+        } sino {
+            retorna n * factorial(n - 1);
+        }
+    }
+};
+inicio
+{
+    resultado = factorial(5);
+    escribe("Factorial recursivo de 5:");
+    escribe(resultado);
+}
+fin
+"""
+
+# ── Recursión doble: fibonacci recursivo ──
+test_rec_doble = """
+programa fibonacci_recursivo;
+vars resultado : entero;
+entero fibonacci (n : entero) {
+    vars r1, r2 : entero;
+    {
+        si (n < 2) {
+            retorna n;
+        } sino {
+            r1 = fibonacci(n - 1);
+            r2 = fibonacci(n - 2);
+            retorna r1 + r2;
+        }
+    }
+};
+inicio
+{
+    resultado = fibonacci(7);
+    escribe("Fibonacci recursivo fib(7):");
+    escribe(resultado);
+}
+fin
+"""
+
+# ── Función que llama a otra función (pelos) ──
+test_pelos = """
+programa pelos;
+vars i : entero;
+entero uno (x : entero) {
+    {
+        retorna x * 2;
+    }
+};
+entero dos (x : entero) {
+    vars r1, r2, xm2 : entero;
+    {
+        r1 = uno(x);
+        xm2 = x - 2;
+        r2 = uno(xm2);
+        retorna r1 + r2;
+    }
+};
+inicio
+{
+    i = 5;
+    escribe(3 + dos(i + 1 - 2));
+}
+fin
+"""
+
 # ─────────────────────────────────── MAIN ───────────────────────────────────
 
 if __name__ == "__main__":
@@ -419,6 +668,70 @@ if __name__ == "__main__":
         ("VM3 - Ciclo",              test_vm3),
         ("VM4 - Función",            test_vm4),
         ("VM5 - Combinado",          test_vm5),
+    ]:
+        print("")
+        print("")
+        print(f"  {nombre}")
+        try:
+            reset_semantic()
+            nuevo_lexer = lexer_module.get_lexer()
+            parser.parse(codigo, lexer=nuevo_lexer)
+
+            from vm import VirtualMachine
+            import memoria as mem_module
+            import codegen
+
+            vm = VirtualMachine(
+                cuadruplos = list(codegen.cuadruplos),
+                cte_table  = dict(mem_module.cte_table),
+                func_dir   = dict(semantica.func_dir),
+            )
+            print("  Output:")
+            vm.run()
+            print("  Ejecución completada ✓")
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            print(f"  Error: {e}")
+    
+    print("\n──── PRUEBAS FINALES ────")
+    for nombre, codigo in [
+        ("F1 - Factorial en el main",        test_fact_main),
+        ("F2 - Factorial en función",        test_fact_func),
+        ("F3 - Fibonacci en el main",        test_fib_main),
+        ("F4 - Fibonacci en función",        test_fib_func),
+        ("F5 - Control de flujo general",    test_flujo),
+        ("F6 - Cambio de contexto",          test_contexto),
+        ("F7 - Prueba de pelos (Sin recursión)",             test_pelos),
+    ]:
+        print("")
+        print("")
+        print(f"  {nombre}")
+        try:
+            reset_semantic()
+            nuevo_lexer = lexer_module.get_lexer()
+            parser.parse(codigo, lexer=nuevo_lexer)
+
+            from vm import VirtualMachine
+            import memoria as mem_module
+            import codegen
+
+            vm = VirtualMachine(
+                cuadruplos = list(codegen.cuadruplos),
+                cte_table  = dict(mem_module.cte_table),
+                func_dir   = dict(semantica.func_dir),
+            )
+            print("  Output:")
+            vm.run()
+            print("  Ejecución completada ✓")
+        except Exception as e:
+            print(f"  Error: {e}")
+    
+    print("\n──── RECURSIÓN ────")
+    for nombre, codigo in [
+        ("R1 - Factorial recursivo (recursión simple)", test_rec_simple),
+        ("R2 - Fibonacci recursivo (recursión doble)",  test_rec_doble),
+        ("R3 - Función que llama función (pelos)",      test_pelos),
     ]:
         print("")
         print("")

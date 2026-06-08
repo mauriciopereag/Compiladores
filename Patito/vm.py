@@ -1,6 +1,7 @@
 import semantica
 import codegen
 import memoria as mem_module
+from memoria import RET_ADDR
 
 class VirtualMachine:
 
@@ -12,6 +13,7 @@ class VirtualMachine:
         self.ret_stack    = []
         self.param_buffer = []
         self.current_era  = None
+        self.ret_value = None
 
         for value, addr in cte_table.items():
             self.memoria[addr] = value
@@ -19,12 +21,14 @@ class VirtualMachine:
     def read(self, addr):
         if addr is None:
             return None
-        if self.call_stack and addr in self.call_stack[-1]:
-            return self.call_stack[-1][addr]
+        if self.call_stack:
+            if addr in self.call_stack[-1]:
+                return self.call_stack[-1][addr]
         return self.memoria.get(addr, 0)
 
     def write(self, addr, value):
-        if self.call_stack and 3000 <= addr <= 4999:
+        # locales, temporales dentro de función van al contexto local
+        if self.call_stack and (3000 <= addr <= 4999 or 5000 <= addr <= 6999):
             self.call_stack[-1][addr] = value
         else:
             self.memoria[addr] = value
@@ -117,6 +121,11 @@ class VirtualMachine:
                 ip = result
 
             elif op == 'ENDFUNC':
+                self.call_stack.pop()
+                ip = self.ret_stack.pop()
+            
+            elif op == 'RETURN':
+                self.memoria[RET_ADDR] = self.read(left)
                 self.call_stack.pop()
                 ip = self.ret_stack.pop()
 

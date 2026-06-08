@@ -5,6 +5,8 @@ MEM = {
     'cte':    {'entero': 7000, 'flotante': 8000},
 }
 
+RET_ADDR = 9000 # dirección virtual del valor de retorno
+
 cte_table  = {}
 addr_count = {k: dict(v) for k, v in MEM.items()}
 

@@ -13,6 +13,7 @@ reserved = {
     'mientras': 'MIENTRAS',
     'haz':      'HAZ',
     'escribe':  'ESCRIBE',
+    'retorna': 'RETORNA',
 }
 
 tokens = list(reserved.values()) + [

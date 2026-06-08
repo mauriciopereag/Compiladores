@@ -88,6 +88,12 @@ def p_estatuto_imprime(p):
 def p_estatuto_llamada(p):
     'estatuto : llamada PUNTOYCOMA'
 
+def p_estatuto_retorna(p):
+    'estatuto : RETORNA expresion PUNTOYCOMA'
+    result_addr = codegen.pila_operandos.pop()
+    codegen.pila_tipos.pop()
+    emit('RETURN', result_addr, None, None)
+
 def p_asigna(p):
     'asigna : ID ASIGNA expresion PUNTOYCOMA'
     result_addr = codegen.pila_operandos.pop()
@@ -304,6 +310,15 @@ def p_llamada(p):
     if fname not in semantica.func_dir:
         raise Exception(f"  Error semántico: función '{fname}' no declarada.")
     emit('GOSUB', fname, None, semantica.func_dir[fname]['start_quad'])
+    # después del GOSUB el valor de retorno está en RET_ADDR
+    from memoria import RET_ADDR
+    ret_tipo = semantica.func_dir[fname]['tipo']
+    if ret_tipo != 'nula':
+        temp = codegen.new_temp(ret_tipo)
+        emit('=', RET_ADDR, None, temp)
+        codegen.pila_operandos.append(temp)
+        codegen.pila_tipos.append(ret_tipo)
+        p[0] = ret_tipo
 
 def p_llamada_id(p):
     'llamada_id : ID'
